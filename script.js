@@ -1,6 +1,7 @@
 let excelData = null;
+let currentPage = 1;
+const rowsPerPage = 20;
 
-// Setup drag and drop
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 
@@ -70,18 +71,16 @@ function handleFile(file) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
 
-            // Ambil sheet pertama
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
 
-            // Convert ke JSON
             excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
             hideLoading();
-            showSuccess(`File "${file.name}" berhasil diupload! Menampilkan ${excelData.length} baris data.`);
+            showSuccess(`File "${file.name}" berhasil diupload! Menampilkan ${excelData.length - 1} baris data.`);
 
+            currentPage = 1;
             generateWebContent();
-
         } catch (error) {
             hideLoading();
             showError('Error membaca file Excel: ' + error.message);
@@ -95,9 +94,9 @@ function generateWebContent() {
     if (!excelData || excelData.length === 0) return;
 
     const contentSection = document.getElementById('contentSection');
-    const statsGrid = document.getElementById('statsGrid');
-    const dataGrid = document.getElementById('dataGrid');
-    const tableContainer = document.getElementById('tableContainer');
+    document.getElementById('statsGrid').innerHTML = '';
+    document.getElementById('dataGrid').innerHTML = '';
+    document.getElementById('tableContainer').innerHTML = '';
 
     generateStats();
     generateDataCards();
@@ -143,7 +142,6 @@ function generateStats() {
 
 function generateDataCards() {
     const dataGrid = document.getElementById('dataGrid');
-
     if (excelData.length < 2) return;
 
     const headers = excelData[0];
@@ -206,8 +204,12 @@ function generateDataCards() {
 
 function generateTable() {
     const tableContainer = document.getElementById('tableContainer');
-
     if (excelData.length === 0) return;
+
+    const totalRows = excelData.length - 1;
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+    const startIndex = (currentPage - 1) * rowsPerPage + 1;
+    const endIndex = Math.min(startIndex + rowsPerPage - 1, excelData.length - 1);
 
     let tableHTML = '<table><thead><tr>';
 
@@ -219,25 +221,46 @@ function generateTable() {
 
     tableHTML += '</tr></thead><tbody>';
 
-    const maxRows = Math.min(excelData.length, 51);
-    for (let i = 1; i < maxRows; i++) {
+    for (let i = startIndex; i <= endIndex; i++) {
         tableHTML += '<tr>';
-        if (excelData[i]) {
-            for (let j = 0; j < excelData[0].length; j++) {
-                const cellValue = excelData[i][j] || '';
-                tableHTML += `<td>${cellValue}</td>`;
-            }
+        for (let j = 0; j < excelData[0].length; j++) {
+            const cellValue = excelData[i][j] || '';
+            tableHTML += `<td>${cellValue}</td>`;
         }
         tableHTML += '</tr>';
     }
 
     tableHTML += '</tbody></table>';
 
-    if (excelData.length > 51) {
-        tableHTML += `<p style="text-align: center; padding: 20px; color: #6b7280;">
-            Menampilkan 50 baris pertama dari ${excelData.length - 1} total baris
-        </p>`;
-    }
+    // Pagination controls
+    tableHTML += `
+    <div class="pagination">
+        <button class="pagination-button" onclick="prevPage()" ${currentPage === 1 ? 'disabled' : ''}>
+            ⬅️ <span>Sebelumnya</span>
+        </button>
+        <span style="font-weight: 600;">Halaman ${currentPage} dari ${totalPages}</span>
+        <button class="pagination-button" onclick="nextPage()" ${currentPage === totalPages ? 'disabled' : ''}>
+            <span>Berikutnya</span> ➡️
+        </button>
+    </div>
+`;
 
     tableContainer.innerHTML = tableHTML;
 }
+
+function nextPage() {
+    const totalPages = Math.ceil((excelData.length - 1) / rowsPerPage);
+    if (currentPage < totalPages) {
+        currentPage++;
+        generateTable();
+    }
+}
+
+function prevPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        generateTable();
+    }
+}
+
+
